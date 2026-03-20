@@ -555,7 +555,7 @@ Respon ÚNICAMENT en format JSON, sense cap text addicional ni markdown:
 {"nomVulgar":"nom comú en català","nomCientific":"nom científic llatí","resum":"2-3 frases en català sobre hàbitat, característiques i comportament. Indica si és invasora i per què.","invasora":true o false}
 Si no s'identifica cap ésser viu: {"nomVulgar":"No identificat","nomCientific":"","resum":"No s'ha pogut identificar cap espècie a la imatge.","invasora":false}`;
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
