@@ -408,11 +408,11 @@ if (IS_CONFIGURED) document.getElementById('config-banner').style.display = 'non
 
 // ─── SUPABASE HELPERS ────────────────────────────────────────
 async function sb(method, path, body) {
-  const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+  const r = await fetch('https://hwxsztdxftohxzxpszro.supabase.co/rest/v1/' + path, {
     method,
     headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3eHN6dGR4ZnRvaHh6eHBzenJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjI5MTIsImV4cCI6MjA4OTU5ODkxMn0.RhsiIGv8MOhwcyT1xncMJOX2vbPIxSOCXqHT05k2LYc',
+      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3eHN6dGR4ZnRvaHh6eHBzenJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjI5MTIsImV4cCI6MjA4OTU5ODkxMn0.RhsiIGv8MOhwcyT1xncMJOX2vbPIxSOCXqHT05k2LYc',
       'Content-Type': 'application/json',
       'Prefer': method === 'POST' ? 'return=representation' : ''
     },
@@ -451,9 +451,9 @@ async function trackVisit() {
   if (!IS_CONFIGURED) { document.getElementById('visit-count').textContent = '—'; return; }
   try {
     // Incrementa el comptador (upsert a fila id=1)
-    await fetch(SUPABASE_URL + '/rest/v1/rpc/increment_visits', {
+    await fetch('https://hwxsztdxftohxzxpszro.supabase.co/rest/v1/rpc/increment_visits', {
       method: 'POST',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+      headers: { 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3eHN6dGR4ZnRvaHh6eHBzenJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjI5MTIsImV4cCI6MjA4OTU5ODkxMn0.RhsiIGv8MOhwcyT1xncMJOX2vbPIxSOCXqHT05k2LYc', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3eHN6dGR4ZnRvaHh6eHBzenJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjI5MTIsImV4cCI6MjA4OTU5ODkxMn0.RhsiIGv8MOhwcyT1xncMJOX2vbPIxSOCXqHT05k2LYc', 'Content-Type': 'application/json' },
       body: '{}'
     });
     // Llegeix el total
@@ -547,23 +547,16 @@ async function submitObservation() {
   }
 }
 
-// ─── CLAUDE API ──────────────────────────────────────────────
-const ANTHROPIC_KEY = ['sk-ant-api03-TXRorqytGgoeKj969LIy7kqPkc8g2',
-  'LJ6RbjvjCZi8llR8UVpTiVFycLJlSvFcd4vHYBaCV6',
-  'xWxQlXIgmY5Bdtw-BgKssgAA'].join('');
+// ─── CLAUDE API via Worker proxy ─────────────────────────────
+const WORKER_URL = 'https://cataleg-especies-proxy.fsole7.workers.dev';
 async function analyzeWithClaude(base64, mediaType) {
   const prompt = `Ets un expert en biologia marina mediterrània. Analitza aquesta fotografia submarina i identifica l'espècie que hi apareix.
 Respon ÚNICAMENT en format JSON, sense cap text addicional ni markdown:
 {"nomVulgar":"nom comú en català","nomCientific":"nom científic llatí","resum":"2-3 frases en català sobre hàbitat, característiques i comportament. Indica si és invasora i per què.","invasora":true o false}
 Si no s'identifica cap ésser viu: {"nomVulgar":"No identificat","nomCientific":"","resum":"No s'ha pogut identificar cap espècie a la imatge.","invasora":false}`;
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+  const resp = await fetch(WORKER_URL + '/anthropic', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-haiku-4-5',
       max_tokens: 600,
@@ -575,7 +568,7 @@ Si no s'identifica cap ésser viu: {"nomVulgar":"No identificat","nomCientific":
   });
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error('API Claude ' + resp.status + ': ' + errText);
+    throw new Error('Error proxy: ' + resp.status + ': ' + errText);
   }
   const data = await resp.json();
   const text = data.content.map(b => b.text || '').join('').trim();
