@@ -547,30 +547,33 @@ async function submitObservation() {
   }
 }
 
-// ─── GEMINI API (gratuït) ────────────────────────────────────
-const GEMINI_KEY = 'AIzaSyC68nmKK2ahFp68Ro2T1V0hFytGR0e0fT4';
+// ─── CLAUDE API ──────────────────────────────────────────────
+const ANTHROPIC_KEY = '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';
 async function analyzeWithClaude(base64, mediaType) {
   const prompt = `Ets un expert en biologia marina mediterrània. Analitza aquesta fotografia submarina i identifica l'espècie que hi apareix.
 Respon ÚNICAMENT en format JSON, sense cap text addicional ni markdown:
 {"nomVulgar":"nom comú en català","nomCientific":"nom científic llatí","resum":"2-3 frases en català sobre hàbitat, característiques i comportament. Indica si és invasora i per què.","invasora":true o false}
 Si no s'identifica cap ésser viu: {"nomVulgar":"No identificat","nomCientific":"","resum":"No s'ha pogut identificar cap espècie a la imatge.","invasora":false}`;
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [
-          { inline_data: { mime_type: mediaType, data: base64 } },
-          { text: prompt }
-        ]}],
-        generationConfig: { maxOutputTokens: 600, temperature: 0.1 }
-      })
-    }
-  );
-  if (!resp.ok) throw new Error('API Gemini ' + resp.status);
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-4-5',
+      max_tokens: 600,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+        { type: 'text', text: prompt }
+      ]}]
+    })
+  });
+  if (!resp.ok) throw new Error('API Claude ' + resp.status);
   const data = await resp.json();
-  const text = data.candidates[0].content.parts[0].text.trim();
+  const text = data.content.map(b => b.text || '').join('').trim();
   return JSON.parse(text.replace(/```json|```/g, '').trim());
 }
 
