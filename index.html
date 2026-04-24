@@ -562,11 +562,10 @@ Si no s'identifica cap ésser viu: {"nomVulgar":"No identificat","nomCientific":
       'Content-Type': 'application/json',
       'x-api-key': ANTHROPIC_KEY,
       'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-      'anthropic-beta': 'interleaved-thinking-2025-05-14'
+      'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-haiku-4-5',
       max_tokens: 600,
       messages: [{ role: 'user', content: [
         { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
@@ -574,7 +573,10 @@ Si no s'identifica cap ésser viu: {"nomVulgar":"No identificat","nomCientific":
       ]}]
     })
   });
-  if (!resp.ok) throw new Error('API Claude ' + resp.status);
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error('API Claude ' + resp.status + ': ' + errText);
+  }
   const data = await resp.json();
   const text = data.content.map(b => b.text || '').join('').trim();
   return JSON.parse(text.replace(/```json|```/g, '').trim());
