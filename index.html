@@ -442,8 +442,6 @@ const sbDel  = (path)       => sb('DELETE', path);
 
 // ─── ESTAT ───────────────────────────────────────────────────
 let observations = [];
-let currentImageBase64 = null;
-let currentImageType = null;
 let pendingDeleteId = null;
 let chartStudents = null;
 let chartYears = null;
@@ -525,62 +523,110 @@ async function loadImagesInBatches() {
 
 loadData();
 
-// ─── FILE HANDLING ───────────────────────────────────────────
+// ─── FILE HANDLING (múltiples fotos) ─────────────────────────
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
-const previewImg = document.getElementById('preview-img');
+const previewGrid = document.getElementById('preview-grid');
+let selectedFiles = [];
+
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
-function handleFile(file) {
-  if (!file.type.startsWith('image/')) { showToast('Només s\'admeten imatges.', true); return; }
-  if (file.size > 10 * 1024 * 1024) { showToast('La imatge és massa gran (màx. 10 MB).', true); return; }
-  const reader = new FileReader();
-  reader.onload = e => {
-    previewImg.src = e.target.result;
-    previewImg.style.display = 'block';
-    currentImageBase64 = e.target.result.split(',')[1];
-    currentImageType = file.type;
-  };
-  reader.readAsDataURL(file);
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFiles(Array.from(e.dataTransfer.files)); });
+fileInput.addEventListener('change', () => { handleFiles(Array.from(fileInput.files)); fileInput.value=''; });
+
+function handleFiles(files) {
+  const valid = files.filter(f => {
+    if (!f.type.startsWith('image/')) { showToast(`${f.name}: només imatges`, true); return false; }
+    if (f.size > 10 * 1024 * 1024) { showToast(`${f.name}: massa gran (màx. 10 MB)`, true); return false; }
+    return true;
+  });
+  if (!valid.length) return;
+  selectedFiles = [...selectedFiles, ...valid];
+  renderPreviews();
 }
 
-// ─── SUBMIT ──────────────────────────────────────────────────
+function renderPreviews() {
+  previewGrid.innerHTML = '';
+  if (!selectedFiles.length) { previewGrid.style.display = 'none'; return; }
+  previewGrid.style.display = 'grid';
+  previewGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(110px, 1fr))';
+  previewGrid.style.gap = '10px';
+  previewGrid.style.marginTop = '12px';
+  selectedFiles.forEach((file, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1;background:#d0eaf5;';
+    const img = document.createElement('img');
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    const del = document.createElement('button');
+    del.innerHTML = '✕';
+    del.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:white;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:11px;font-weight:700;line-height:1;';
+    del.onclick = () => { selectedFiles.splice(i, 1); renderPreviews(); };
+    const reader = new FileReader();
+    reader.onload = e => img.src = e.target.result;
+    reader.readAsDataURL(file);
+    wrap.appendChild(img); wrap.appendChild(del);
+    previewGrid.appendChild(wrap);
+  });
+}
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+// ─── SUBMIT (múltiples fotos) ─────────────────────────────────
 async function submitObservation() {
   if (!IS_CONFIGURED) { showToast('Cal configurar Supabase primer.', true); return; }
   const name   = document.getElementById('student-name').value.trim();
   const course = document.getElementById('student-course').value.trim();
   const year   = document.getElementById('obs-year').value.trim();
   if (!name || !course || !year) { showToast('Omple tots els camps del formulari.', true); return; }
-  if (!currentImageBase64) { showToast('Selecciona una imatge primer.', true); return; }
+  if (!selectedFiles.length) { showToast('Selecciona almenys una imatge.', true); return; }
+
   document.getElementById('submit-btn').disabled = true;
   document.getElementById('analyzing').classList.add('visible');
-  try {
-    const result = await analyzeWithClaude(currentImageBase64, currentImageType);
-    const row = {
-      student_name: name, course, year: parseInt(year),
-      image_base64: currentImageBase64, image_type: currentImageType,
-      common_name: result.nomVulgar || 'Desconeguda',
-      scientific_name: result.nomCientific || '',
-      description: result.resum || '',
-      invasive: result.invasora === true
-    };
-    const inserted = await sbPost(TABLE_OBS, row);
-    const obs = { id: inserted[0].id, studentName: name, course, year,
-      imageBase64: currentImageBase64, imageType: currentImageType,
-      commonName: row.common_name, scientificName: row.scientific_name,
-      description: row.description, invasive: row.invasive, addedAt: inserted[0].created_at };
-    observations.unshift(obs);
-    renderAll();
-    resetForm();
-    showToast('✅ ' + obs.commonName + ' afegida al catàleg!', 'success');
-  } catch(err) {
-    showToast('Error: ' + err.message, true);
-  } finally {
-    document.getElementById('submit-btn').disabled = false;
-    document.getElementById('analyzing').classList.remove('visible');
+
+  let afegides = 0;
+  let errors = 0;
+
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const file = selectedFiles[i];
+    document.getElementById('analyzing-text').textContent =
+      `Analitzant foto ${i + 1} de ${selectedFiles.length}… pot trigar uns segons`;
+    try {
+      const base64 = await fileToBase64(file);
+      const result = await analyzeWithClaude(base64, file.type);
+      const row = {
+        student_name: name, course, year,
+        image_base64: base64, image_type: file.type,
+        common_name: result.nomVulgar || 'Desconeguda',
+        scientific_name: result.nomCientific || '',
+        description: result.resum || '',
+        invasive: result.invasora === true
+      };
+      const inserted = await sbPost(TABLE_OBS, row);
+      const obs = { id: inserted[0].id, studentName: name, course, year,
+        imageBase64: base64, imageType: file.type,
+        commonName: row.common_name, scientificName: row.scientific_name,
+        description: row.description, invasive: row.invasive, addedAt: inserted[0].created_at };
+      observations.unshift(obs);
+      afegides++;
+    } catch(err) {
+      errors++;
+      showToast(`Error foto ${i+1}: ${err.message}`, true);
+    }
   }
+
+  renderAll();
+  resetForm();
+  if (afegides > 0) showToast(`✅ ${afegides} foto${afegides > 1 ? 's' : ''} afegida${afegides > 1 ? 's' : ''} al catàleg!`, 'success');
+
+  document.getElementById('submit-btn').disabled = false;
+  document.getElementById('analyzing').classList.remove('visible');
 }
 
 // ─── CLAUDE API via Worker proxy ─────────────────────────────
@@ -844,8 +890,8 @@ function resetForm() {
   document.getElementById('student-course').value = '';
   document.getElementById('obs-year').value = '2025-2026';
   document.getElementById('file-input').value = '';
-  previewImg.style.display = 'none';
-  currentImageBase64 = null; currentImageType = null;
+  selectedFiles = [];
+  renderPreviews();
 }
 function showToast(msg, type=false) {
   const t = document.getElementById('toast');
