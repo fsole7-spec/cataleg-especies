@@ -601,7 +601,7 @@ async function submitObservation() {
       const base64 = await fileToBase64(file);
       const result = await analyzeWithClaude(base64, file.type);
       const row = {
-        student_name: name, course, year,
+        student_name: name, course, year: year.toString(),
         image_base64: base64, image_type: file.type,
         common_name: result.nomVulgar || 'Desconeguda',
         scientific_name: result.nomCientific || '',
